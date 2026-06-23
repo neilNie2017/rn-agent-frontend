@@ -3,14 +3,16 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
+import { AgentManagementScreen } from '../screens/settings/AgentManagementScreen';
 import { MainTabs } from './MainTabs';
+import { rootNavigationRef } from './rootNavigation';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function AppNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={rootNavigationRef}>
       <Stack.Navigator
         initialRouteName="Login"
         screenOptions={{
@@ -31,6 +33,11 @@ export function AppNavigator() {
         <Stack.Screen
           name="MainTabs"
           component={MainTabs}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="AgentManagement"
+          component={AgentManagementScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

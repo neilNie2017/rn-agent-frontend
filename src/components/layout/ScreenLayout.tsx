@@ -1,6 +1,6 @@
 import React, { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ScreenLayoutProps = PropsWithChildren<{
   headerLeft?: 'sidebar';
@@ -16,32 +16,36 @@ export function ScreenLayout({
   onHeaderLeftPress,
   routeName,
 }: ScreenLayoutProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    <View style={styles.container}>
       {headerShown ? (
-        <View style={styles.header}>
-          <View style={styles.headerSide}>
-            {headerLeft === 'sidebar' ? (
-              <Pressable
-                accessibilityLabel="打开侧边栏"
-                accessibilityRole="button"
-                onPress={onHeaderLeftPress}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  pressed ? styles.pressed : null,
-                ]}>
-                <Text style={styles.iconText}>☰</Text>
-              </Pressable>
-            ) : null}
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <View style={styles.headerInner}>
+            <View style={styles.headerSide}>
+              {headerLeft === 'sidebar' ? (
+                <Pressable
+                  accessibilityLabel="打开侧边栏"
+                  accessibilityRole="button"
+                  onPress={onHeaderLeftPress}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    pressed ? styles.pressed : null,
+                  ]}>
+                  <Text style={styles.iconText}>☰</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text numberOfLines={1} style={styles.title}>
+              {routeName}
+            </Text>
+            <View style={styles.headerSide} />
           </View>
-          <Text numberOfLines={1} style={styles.title}>
-            {routeName}
-          </Text>
-          <View style={styles.headerSide} />
         </View>
       ) : null}
       <View style={styles.content}>{children}</View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -51,10 +55,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f7fb',
   },
   header: {
-    alignItems: 'center',
     backgroundColor: '#ffffff',
     borderBottomColor: '#e2e8f0',
     borderBottomWidth: 1,
+  },
+  headerInner: {
+    alignItems: 'center',
     flexDirection: 'row',
     height: 52,
     justifyContent: 'space-between',

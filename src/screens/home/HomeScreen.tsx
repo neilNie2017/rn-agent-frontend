@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,11 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
-type HomeScreenProps = {
-  onCloseSidebar: () => void;
-  sidebarVisible: boolean;
-};
+import { useTheme } from '../../context/ThemeContext';
 
 type Message = {
   id: string;
@@ -22,13 +18,7 @@ type Message = {
   text: string;
 };
 
-type Conversation = {
-  id: string;
-  title: string;
-  time: string;
-};
-
-const messages: Message[] = [
+const initialMessages: Message[] = [
   {
     id: '1',
     role: 'assistant',
@@ -46,30 +36,65 @@ const messages: Message[] = [
   },
 ];
 
-const conversations: Conversation[] = [
-  { id: '1', title: 'RN 项目初始化', time: '刚刚' },
-  { id: '2', title: '登录注册流程', time: '10 分钟前' },
-  { id: '3', title: '接口环境配置', time: '昨天' },
-  { id: '4', title: '首页交互草稿', time: '周一' },
-];
-
-export function HomeScreen({ onCloseSidebar, sidebarVisible }: HomeScreenProps) {
+export function HomeScreen() {
+  const { theme } = useTheme();
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [prompt, setPrompt] = useState('');
-  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
 
-  const filteredConversations = useMemo(
-    () =>
-      conversations.filter(item =>
-        item.title.toLowerCase().includes(search.trim().toLowerCase()),
-      ),
-    [search],
-  );
+  const scrollToEnd = useCallback(() => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  }, []);
+
+  const handleSend = useCallback(async () => {
+    const text = prompt.trim();
+    if (!text || loading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      text,
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setPrompt('');
+    setLoading(true);
+    scrollToEnd();
+
+    try {
+      // TODO: 替换为真实的 AI 接口调用
+      // const res = await request.post<{ reply: string }>('/chat', { message: text });
+      await new Promise<void>(resolve => setTimeout(resolve, 800));
+      const replyText = `收到你的消息：「${text}」（这是模拟回复，请接入真实 AI 接口）`;
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: replyText,
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: '抱歉，请求出错了，请稍后重试。',
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+      scrollToEnd();
+    }
+  }, [prompt, loading, scrollToEnd]);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}>
+      style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
+        ref={flatListRef}
         contentContainerStyle={styles.messageList}
         data={messages}
         keyExtractor={item => item.id}
@@ -77,7 +102,9 @@ export function HomeScreen({ onCloseSidebar, sidebarVisible }: HomeScreenProps) 
           <View
             style={[
               styles.messageBubble,
-              item.role === 'user' ? styles.userBubble : styles.assistantBubble,
+              item.role === 'user'
+                ? [styles.userBubble, { backgroundColor: theme.userBubble }]
+                : [styles.assistantBubble, { backgroundColor: theme.assistantBubble }],
             ]}>
             <Text
               style={[
@@ -90,74 +117,38 @@ export function HomeScreen({ onCloseSidebar, sidebarVisible }: HomeScreenProps) 
             </Text>
           </View>
         )}
+        ListFooterComponent={
+          loading ? (
+            <View style={styles.typingIndicator}>
+              <ActivityIndicator color={theme.userBubble} size="small" />
+              <Text style={styles.typingText}>AI 正在思考...</Text>
+            </View>
+          ) : null
+        }
       />
       <View style={styles.composer}>
         <TextInput
           multiline
           onChangeText={setPrompt}
+          onSubmitEditing={handleSend}
           placeholder="输入消息..."
           placeholderTextColor="#94a3b8"
           style={styles.input}
           value={prompt}
+          editable={!loading}
         />
         <Pressable
           accessibilityRole="button"
+          onPress={handleSend}
           style={({ pressed }) => [
             styles.sendButton,
+            { backgroundColor: theme.userBubble },
             pressed ? styles.pressed : null,
+            (!prompt.trim() || loading) ? styles.sendButtonDisabled : null,
           ]}>
           <Text style={styles.sendText}>发送</Text>
         </Pressable>
       </View>
-
-      {sidebarVisible ? (
-        <View style={styles.overlay}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onCloseSidebar}
-            style={styles.backdrop}
-          />
-          <View style={styles.sidebar}>
-            <View style={styles.sidebarHeader}>
-              <Text style={styles.sidebarTitle}>最近会话</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={onCloseSidebar}
-                style={({ pressed }) => [
-                  styles.closeButton,
-                  pressed ? styles.pressed : null,
-                ]}>
-                <Text style={styles.closeText}>×</Text>
-              </Pressable>
-            </View>
-            <TextInput
-              autoCapitalize="none"
-              onChangeText={setSearch}
-              placeholder="搜索会话"
-              placeholderTextColor="#94a3b8"
-              style={styles.searchInput}
-              value={search}
-            />
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color="#2563eb" size="small" />
-              <Text style={styles.loadingText}>加载最近会话...</Text>
-            </View>
-            <FlatList
-              contentContainerStyle={styles.conversationList}
-              data={filteredConversations}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <Pressable style={styles.conversationItem}>
-                  <Text numberOfLines={1} style={styles.conversationTitle}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.conversationTime}>{item.time}</Text>
-                </Pressable>
-              )}
-            />
-          </View>
-        </View>
-      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -227,6 +218,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 64,
   },
+  sendButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
   pressed: {
     opacity: 0.76,
   },
@@ -235,97 +229,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
-  overlay: {
-    flexDirection: 'row',
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    zIndex: 10,
-  },
-  backdrop: {
-    backgroundColor: 'rgba(15, 23, 42, 0.32)',
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-  sidebar: {
-    backgroundColor: '#ffffff',
-    borderRightColor: '#e2e8f0',
-    borderRightWidth: 1,
-    elevation: 12,
-    padding: 16,
-    shadowColor: '#0f172a',
-    shadowOffset: { height: 8, width: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    width: '82%',
-  },
-  sidebarHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  sidebarTitle: {
-    color: '#111827',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  closeButton: {
-    alignItems: 'center',
-    borderRadius: 8,
-    height: 34,
-    justifyContent: 'center',
-    width: 34,
-  },
-  closeText: {
-    color: '#334155',
-    fontSize: 26,
-    lineHeight: 28,
-  },
-  searchInput: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#d8e0ec',
-    borderRadius: 8,
-    borderWidth: 1,
-    color: '#111827',
-    fontSize: 15,
-    height: 42,
-    paddingHorizontal: 12,
-  },
-  loadingRow: {
+  typingIndicator: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 8,
-    marginTop: 16,
+    paddingVertical: 8,
   },
-  loadingText: {
+  typingText: {
     color: '#64748b',
     fontSize: 13,
-  },
-  conversationList: {
-    gap: 10,
-    paddingTop: 16,
-  },
-  conversationItem: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 12,
-  },
-  conversationTitle: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  conversationTime: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 4,
   },
 });

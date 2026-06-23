@@ -20,8 +20,8 @@ export function LoginScreen({ navigation }: Props) {
     formState: { isValid },
   } = useForm<LoginFormValues>({
     defaultValues: {
-      account: '',
-      password: '',
+      account: 'admin@example.com',
+      password: '123456',
     },
     mode: 'onChange',
   });

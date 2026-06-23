@@ -11,4 +11,5 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  AgentManagement: undefined;
 };

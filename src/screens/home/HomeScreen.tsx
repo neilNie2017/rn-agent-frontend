@@ -226,14 +226,14 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
       setLoading(true);
 
       try {
-        const apiMessages = nextMessages.map(message => ({
-          content: message.text,
-          role: message.role,
-        }));
-
         const response = await sendChatApi({
           ...(currentChatId ? { chatId: currentChatId } : {}),
-          messages: apiMessages,
+          messages: [
+            {
+              content: text,
+              role: 'user',
+            },
+          ],
           provider: 'agnes',
         });
         const reply = getAiReply(response);

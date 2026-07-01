@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
 import { AgentManagementScreen } from '../screens/settings/AgentManagementScreen';
+import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { MainTabs } from './MainTabs';
 import { rootNavigationRef } from './rootNavigation';
 import type { RootStackParamList } from './types';
@@ -34,6 +35,11 @@ export function AppNavigator() {
           name="MainTabs"
           component={MainTabs}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ title: 'Profile' }}
         />
         <Stack.Screen
           name="AgentManagement"

@@ -1,33 +1,68 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Alert } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useForm } from 'react-hook-form';
 import { AuthButton } from './AuthButton';
 import { AuthLayout } from './AuthLayout';
 import { FormTextInput } from './FormTextInput';
 import type { RootStackParamList } from '../../navigation/types';
+import { loginApi } from '../../request/auth';
+import { setAuthToken } from '../../request/http';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 type LoginFormValues = {
-  account: string;
+  email: string;
   password: string;
 };
 
+function getLoginToken(response: Awaited<ReturnType<typeof loginApi>>) {
+  return (
+    response.data?.accessToken ??
+    response.data?.token ??
+    response.accessToken ??
+    response.token ??
+    ''
+  );
+}
+
 export function LoginScreen({ navigation }: Props) {
+  const [submitting, setSubmitting] = useState(false);
   const {
     control,
     handleSubmit,
     formState: { isValid },
   } = useForm<LoginFormValues>({
     defaultValues: {
-      account: 'admin@example.com',
+      email: 'test@example.com',
       password: '123456',
     },
     mode: 'onChange',
   });
 
-  function handleLogin() {
-    navigation.replace('MainTabs', { screen: 'Home' });
+  async function handleLogin(values: LoginFormValues) {
+    if (submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const response = await loginApi(values);
+      const token = getLoginToken(response);
+
+      if (token) {
+        setAuthToken(token);
+      }
+
+      navigation.replace('MainTabs');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '登录失败，请稍后重试。';
+      Alert.alert('登录失败', message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -37,11 +72,17 @@ export function LoginScreen({ navigation }: Props) {
         autoCorrect={false}
         control={control}
         keyboardType="email-address"
-        label="账号"
-        name="account"
-        placeholder="邮箱或手机号"
+        label="邮箱"
+        name="email"
+        placeholder="test@example.com"
         returnKeyType="next"
-        rules={{ required: '请输入账号' }}
+        rules={{
+          required: '请输入邮箱',
+          pattern: {
+            value: /^\S+@\S+\.\S+$/,
+            message: '请输入正确的邮箱',
+          },
+        }}
       />
       <FormTextInput
         control={control}
@@ -56,9 +97,9 @@ export function LoginScreen({ navigation }: Props) {
         secureTextEntry
       />
       <AuthButton
-        disabled={!isValid}
+        disabled={!isValid || submitting}
         onPress={handleSubmit(handleLogin)}
-        title="登录"
+        title={submitting ? '登录中...' : '登录'}
       />
       <AuthButton
         onPress={() => navigation.navigate('Register')}

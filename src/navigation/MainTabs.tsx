@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Pressable,
@@ -9,14 +10,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Trash2, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ScreenLayout } from '../components/layout/ScreenLayout';
 import { HomeScreen } from '../screens/home/HomeScreen';
-import { mainTabRoutes } from './routeConfig';
-import type { MainTabParamList, MainTabRouteName } from './types';
-
-const Tab = createBottomTabNavigator<MainTabParamList>();
+import {
+  deleteChatApi,
+  getChatsApi,
+  type ChatSummary,
+  type ChatsResponse,
+} from '../request/ai';
+import { rootNavigationRef } from './rootNavigation';
 
 type Conversation = {
   id: string;
@@ -24,112 +28,80 @@ type Conversation = {
   time: string;
 };
 
-const conversations: Conversation[] = [
-  { id: '1', title: 'RN 项目初始化', time: '刚刚' },
-  { id: '2', title: '登录注册流程', time: '10 分钟前' },
-  { id: '3', title: '接口环境配置', time: '昨天' },
-  { id: '4', title: '首页交互草稿', time: '周一' },
-];
+type ParsedChats = {
+  hasMore?: boolean;
+  items: ChatSummary[];
+  total?: number;
+};
 
-const tabIcons: Record<MainTabRouteName, string> = { Home: 'AI', Profile: 'Me' };
+const PAGE_SIZE = 10;
+const SIDEBAR_WIDTH = 340;
 
-/* ─── 自定义动画 Tab Bar ─── */
-function CustomTabBar({
-  state,
-  navigation,
-}: {
-  state: { index: number; routes: Array<{ key: string; name: string }> };
-  navigation: any;
-}) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const [layoutWidth, setLayoutWidth] = useState(0);
-  const insets = useSafeAreaInsets();
-  const routeIndex = state.index;
+function parseChatsResponse(response: ChatsResponse): ParsedChats {
+  if (Array.isArray(response)) {
+    return { items: response };
+  }
 
-  useEffect(() => {
-    if (layoutWidth > 0) {
-      const tabWidth = layoutWidth / state.routes.length;
-      Animated.spring(translateX, {
-        toValue: routeIndex * tabWidth + tabWidth / 2,
-        useNativeDriver: true,
-        tension: 90,
-        friction: 13,
-      }).start();
-    }
-  }, [routeIndex, layoutWidth, translateX, state.routes.length]);
+  if (Array.isArray(response.data)) {
+    return { items: response.data, total: response.total };
+  }
 
-  return (
-    <View
-      style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}
-      onLayout={e => setLayoutWidth(e.nativeEvent.layout.width)}>
-      {/* 滑动胶囊指示器 */}
-      <Animated.View
-        style={[
-          styles.pill,
-          {
-            transform: [
-              { translateX: translateX },
-              { translateX: -styles.pill.width! / 2 },
-            ],
-          },
-        ]}
-      />
+  const data = response.data;
 
-      {state.routes.map((route, index) => {
-        const isFocused = index === routeIndex;
-        const iconName = tabIcons[route.name as MainTabRouteName] ?? route.name;
-        const tabLabel =
-          mainTabRoutes.find(r => r.name === route.name)?.tabLabel ?? route.name;
-
-        return (
-          <Pressable
-            key={route.key}
-            onPress={() => {
-              navigation.navigate(route.name);
-            }}
-            style={styles.tabItem}>
-            {/* 图标容器 */}
-            <View
-              style={[
-                styles.iconWrap,
-                isFocused ? styles.iconWrapActive : styles.iconWrapInactive,
-              ]}>
-              <Text
-                style={[
-                  styles.iconText,
-                  isFocused ? styles.iconTextActive : styles.iconTextInactive,
-                ]}>
-                {iconName}
-              </Text>
-            </View>
-
-            {/* 标签 */}
-            <Text
-              style={[
-                styles.tabLabel,
-                isFocused ? styles.tabLabelActive : styles.tabLabelInactive,
-              ]}>
-              {tabLabel}
-            </Text>
-
-            {/* 选中圆点 */}
-            <View
-              style={[
-                styles.dot,
-                isFocused ? styles.dotActive : styles.dotInactive,
-              ]}
-            />
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return {
+    items:
+      data?.items ??
+      data?.records ??
+      data?.chats ??
+      data?.list ??
+      response.records ??
+      response.chats ??
+      response.list ??
+      [],
+    hasMore: data?.hasMore,
+    total: data?.total ?? response.total,
+  };
 }
 
-/* ─── 主组件 ─── */
+function formatChatTime(value?: string) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString();
+}
+
+function toConversation(chat: ChatSummary): Conversation {
+  const id = chat.id ?? chat.chatId ?? String(Date.now());
+
+  return {
+    id,
+    title: chat.title ?? chat.name ?? '未命名会话',
+    time: formatChatTime(chat.updatedAt ?? chat.createdAt),
+  };
+}
+
 export function MainTabs() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [sidebarMounted, setSidebarMounted] = useState(false);
   const [search, setSearch] = useState('');
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string | undefined>();
+  const [selectedChatTitle, setSelectedChatTitle] = useState('');
+  const [current, setCurrent] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [deletingChatId, setDeletingChatId] = useState('');
+  const [chatError, setChatError] = useState('');
+  const sidebarAnim = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
   const filteredConversations = useMemo(
@@ -137,66 +109,198 @@ export function MainTabs() {
       conversations.filter(item =>
         item.title.toLowerCase().includes(search.trim().toLowerCase()),
       ),
-    [search],
+    [conversations, search],
   );
+
+  async function loadChats(page: number, mode: 'initial' | 'refresh' | 'more') {
+    if (mode === 'more' && (loadingMore || !hasMore)) {
+      return;
+    }
+
+    if (mode === 'initial') {
+      setInitialLoading(true);
+    }
+
+    if (mode === 'refresh') {
+      setRefreshing(true);
+    }
+
+    if (mode === 'more') {
+      setLoadingMore(true);
+    }
+
+    setChatError('');
+
+    try {
+      const response = await getChatsApi({ current: page, pageSize: PAGE_SIZE });
+      const parsed = parseChatsResponse(response);
+      const nextConversations = parsed.items.map(toConversation);
+
+      setConversations(prev =>
+        page === 1 ? nextConversations : [...prev, ...nextConversations],
+      );
+      setCurrent(page);
+
+      const loadedCount =
+        page === 1
+          ? nextConversations.length
+          : conversations.length + nextConversations.length;
+
+      setHasMore(
+        typeof parsed.hasMore === 'boolean'
+          ? parsed.hasMore
+          : typeof parsed.total === 'number'
+          ? loadedCount < parsed.total
+          : nextConversations.length >= PAGE_SIZE,
+      );
+    } catch (error) {
+      setChatError(
+        error instanceof Error ? error.message : '会话列表加载失败',
+      );
+    } finally {
+      setInitialLoading(false);
+      setRefreshing(false);
+      setLoadingMore(false);
+    }
+  }
+
+  useEffect(() => {
+    if (sidebarVisible) {
+      loadChats(1, 'initial');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarVisible]);
+
+  useEffect(() => {
+    if (sidebarVisible) {
+      setSidebarMounted(true);
+      Animated.timing(sidebarAnim, {
+        duration: 220,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+
+    Animated.timing(sidebarAnim, {
+      duration: 180,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setSidebarMounted(false);
+      }
+    });
+  }, [sidebarAnim, sidebarVisible]);
 
   function closeSidebar() {
     setSidebarVisible(false);
   }
 
+  function openProfile() {
+    rootNavigationRef.navigate('Profile');
+  }
+
+  function handleRefresh() {
+    loadChats(1, 'refresh');
+  }
+
+  function handleLoadMore() {
+    if (!initialLoading && !refreshing && !loadingMore && hasMore) {
+      loadChats(current + 1, 'more');
+    }
+  }
+
+  function handleOpenConversation(chatId: string) {
+    const conversation = conversations.find(item => item.id === chatId);
+
+    setSelectedChatId(chatId);
+    setSelectedChatTitle(conversation?.title ?? '');
+    closeSidebar();
+  }
+
+  function handleDeleteConversation(item: Conversation) {
+    Alert.alert('删除会话', `确定删除「${item.title}」吗？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          setDeletingChatId(item.id);
+
+          try {
+            await deleteChatApi(item.id);
+            await loadChats(1, 'refresh');
+
+            if (selectedChatId === item.id) {
+              setSelectedChatId(undefined);
+              setSelectedChatTitle('');
+            }
+          } catch (error) {
+            Alert.alert(
+              '删除失败',
+              error instanceof Error ? error.message : '请稍后重试。',
+            );
+          } finally {
+            setDeletingChatId('');
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <View style={styles.container}>
-      <Tab.Navigator
-        tabBar={props => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}>
-        {mainTabRoutes.map(route => {
-          const RouteComponent = route.component;
+      <ScreenLayout
+        headerLeft="sidebar"
+        headerRight="profile"
+        onHeaderLeftPress={() => setSidebarVisible(true)}
+        onHeaderRightPress={openProfile}
+        routeName={selectedChatTitle || 'Home'}>
+        <HomeScreen selectedChatId={selectedChatId} />
+      </ScreenLayout>
 
-          return (
-            <Tab.Screen
-              key={route.name}
-              name={route.name}
-              options={{
-                tabBarLabel: route.tabLabel ?? route.name,
-                tabBarIcon: () => null,
-              }}>
-              {() => (
-                <ScreenLayout
-                  headerLeft={route.headerLeft}
-                  headerShown={route.headerShown}
-                  onHeaderLeftPress={() => {
-                    if (route.name === 'Home') {
-                      setSidebarVisible(true);
-                    }
-                  }}
-                  routeName={route.name}>
-                  <RouteComponent />
-                </ScreenLayout>
-              )}
-            </Tab.Screen>
-          );
-        })}
-      </Tab.Navigator>
-
-      {/* ── 全屏侧边栏（覆盖 header + tab bar） ── */}
-      {sidebarVisible ? (
+      {sidebarMounted ? (
         <View style={styles.overlay}>
           <Pressable
             accessibilityRole="button"
             onPress={closeSidebar}
-            style={styles.backdrop}
-          />
-          <View style={[styles.sidebar, { paddingTop: insets.top + 16 }]}>
+            style={styles.backdropPressable}>
+            <Animated.View
+              style={[
+                styles.backdrop,
+                {
+                  opacity: sidebarAnim,
+                },
+              ]}
+            />
+          </Pressable>
+          <Animated.View
+            style={[
+              styles.sidebar,
+              {
+                paddingTop: insets.top + 16,
+                transform: [
+                  {
+                    translateX: sidebarAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-SIDEBAR_WIDTH, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}>
             <View style={styles.sidebarHeader}>
               <Text style={styles.sidebarTitle}>最近会话</Text>
               <Pressable
+                accessibilityLabel="关闭侧边栏"
                 accessibilityRole="button"
                 onPress={closeSidebar}
                 style={({ pressed }) => [
                   styles.closeButton,
                   pressed ? styles.pressed : null,
                 ]}>
-                <Text style={styles.closeText}>×</Text>
+                <X color="#334155" size={22} strokeWidth={2.4} />
               </Pressable>
             </View>
             <TextInput
@@ -207,107 +311,81 @@ export function MainTabs() {
               style={styles.searchInput}
               value={search}
             />
-            <View style={styles.loadingRow}>
-              <ActivityIndicator color="#2563eb" size="small" />
-              <Text style={styles.loadingText}>加载最近会话...</Text>
-            </View>
+            {initialLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#2563eb" size="small" />
+                <Text style={styles.loadingText}>加载最近会话...</Text>
+              </View>
+            ) : null}
+            {chatError ? (
+              <Text style={styles.errorText}>{chatError}</Text>
+            ) : null}
             <FlatList
               contentContainerStyle={styles.conversationList}
               data={filteredConversations}
               keyExtractor={item => item.id}
+              ListEmptyComponent={
+                !initialLoading && !chatError ? (
+                  <Text style={styles.emptyText}>暂无会话</Text>
+                ) : null
+              }
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={styles.footerLoading}>
+                    <ActivityIndicator color="#2563eb" size="small" />
+                  </View>
+                ) : null
+              }
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.2}
+              onRefresh={handleRefresh}
+              refreshing={refreshing}
               renderItem={({ item }) => (
-                <Pressable style={styles.conversationItem}>
-                  <Text numberOfLines={1} style={styles.conversationTitle}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.conversationTime}>{item.time}</Text>
+                <Pressable
+                  onPress={() => handleOpenConversation(item.id)}
+                  style={[
+                    styles.conversationItem,
+                    selectedChatId === item.id
+                      ? styles.activeConversation
+                      : null,
+                  ]}>
+                  <View style={styles.conversationContent}>
+                    <Text numberOfLines={1} style={styles.conversationTitle}>
+                      {item.title}
+                    </Text>
+                    {item.time ? (
+                      <Text style={styles.conversationTime}>{item.time}</Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    accessibilityLabel="删除会话"
+                    accessibilityRole="button"
+                    disabled={deletingChatId === item.id}
+                    onPress={() => handleDeleteConversation(item)}
+                    style={({ pressed }) => [
+                      styles.deleteButton,
+                      pressed ? styles.pressed : null,
+                    ]}>
+                    {deletingChatId === item.id ? (
+                      <ActivityIndicator color="#dc2626" size="small" />
+                    ) : (
+                      <Trash2 color="#dc2626" size={17} strokeWidth={2.2} />
+                    )}
+                  </Pressable>
                 </Pressable>
               )}
             />
-          </View>
+          </Animated.View>
         </View>
       ) : null}
     </View>
   );
 }
 
-const PILL_W = 52;
-const PILL_H = 32;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
-  /* ─── Tab Bar ─── */
-  tabBar: {
-    backgroundColor: '#ffffff',
-    borderTopColor: '#e2e8f0',
-    borderTopWidth: 1,
-    flexDirection: 'row',
-    paddingTop: 6,
-  },
-  pill: {
-    backgroundColor: '#eff6ff',
-    borderRadius: 16,
-    height: PILL_H,
-    position: 'absolute',
-    top: 4,
-    width: PILL_W,
-  },
-  tabItem: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 2,
-    paddingVertical: 2,
-  },
-  iconWrap: {
-    alignItems: 'center',
-    borderRadius: 16,
-    height: 32,
-    justifyContent: 'center',
-    width: 52,
-  },
-  iconWrapActive: {
-    backgroundColor: '#2563eb',
-  },
-  iconWrapInactive: {
-    backgroundColor: 'transparent',
-  },
-  iconText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  iconTextActive: {
-    color: '#ffffff',
-  },
-  iconTextInactive: {
-    color: '#94a3b8',
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  tabLabelActive: {
-    color: '#2563eb',
-  },
-  tabLabelInactive: {
-    color: '#94a3b8',
-  },
-  dot: {
-    borderRadius: 2,
-    height: 4,
-    marginTop: 2,
-    width: 4,
-  },
-  dotActive: {
-    backgroundColor: '#2563eb',
-  },
-  dotInactive: {
-    backgroundColor: 'transparent',
-  },
-
-  /* ─── 侧边栏 ─── */
   overlay: {
     bottom: 0,
     left: 0,
@@ -315,6 +393,13 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     zIndex: 100,
+  },
+  backdropPressable: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   backdrop: {
     backgroundColor: 'rgba(15, 23, 42, 0.32)',
@@ -328,13 +413,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRightColor: '#e2e8f0',
     borderRightWidth: 1,
+    bottom: 0,
     elevation: 12,
-    flex: 1,
+    left: 0,
     padding: 16,
+    position: 'absolute',
     shadowColor: '#0f172a',
     shadowOffset: { height: 8, width: 4 },
     shadowOpacity: 0.18,
     shadowRadius: 18,
+    top: 0,
     width: '82%',
   },
   sidebarHeader: {
@@ -358,11 +446,6 @@ const styles = StyleSheet.create({
   pressed: {
     backgroundColor: '#eef2ff',
   },
-  closeText: {
-    color: '#334155',
-    fontSize: 26,
-    lineHeight: 28,
-  },
   searchInput: {
     backgroundColor: '#f8fafc',
     borderColor: '#d8e0ec',
@@ -383,16 +466,36 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 13,
   },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 13,
+    marginTop: 16,
+  },
+  emptyText: {
+    color: '#64748b',
+    fontSize: 13,
+    paddingVertical: 8,
+  },
   conversationList: {
     gap: 10,
     paddingTop: 16,
   },
   conversationItem: {
+    alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderColor: '#e2e8f0',
     borderRadius: 8,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
     padding: 12,
+  },
+  activeConversation: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  conversationContent: {
+    flex: 1,
   },
   conversationTitle: {
     color: '#111827',
@@ -403,5 +506,16 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 12,
     marginTop: 4,
+  },
+  deleteButton: {
+    alignItems: 'center',
+    borderRadius: 8,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  footerLoading: {
+    alignItems: 'center',
+    paddingVertical: 12,
   },
 });

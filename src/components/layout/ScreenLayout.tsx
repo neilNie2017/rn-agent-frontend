@@ -1,19 +1,24 @@
 import React, { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Menu, UserRound } from 'lucide-react-native';
 
 type ScreenLayoutProps = PropsWithChildren<{
   headerLeft?: 'sidebar';
+  headerRight?: 'profile';
   headerShown?: boolean;
   onHeaderLeftPress?: () => void;
+  onHeaderRightPress?: () => void;
   routeName: string;
 }>;
 
 export function ScreenLayout({
   children,
   headerLeft,
+  headerRight,
   headerShown = true,
   onHeaderLeftPress,
+  onHeaderRightPress,
   routeName,
 }: ScreenLayoutProps) {
   const insets = useSafeAreaInsets();
@@ -33,14 +38,27 @@ export function ScreenLayout({
                     styles.iconButton,
                     pressed ? styles.pressed : null,
                   ]}>
-                  <Text style={styles.iconText}>☰</Text>
+                  <Menu color="#111827" size={22} strokeWidth={2.4} />
                 </Pressable>
               ) : null}
             </View>
             <Text numberOfLines={1} style={styles.title}>
               {routeName}
             </Text>
-            <View style={styles.headerSide} />
+            <View style={styles.headerSide}>
+              {headerRight === 'profile' ? (
+                <Pressable
+                  accessibilityLabel="打开个人中心"
+                  accessibilityRole="button"
+                  onPress={onHeaderRightPress}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    pressed ? styles.pressed : null,
+                  ]}>
+                  <UserRound color="#111827" size={21} strokeWidth={2.4} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         </View>
       ) : null}
@@ -81,12 +99,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     backgroundColor: '#eef2ff',
-  },
-  iconText: {
-    color: '#111827',
-    fontSize: 22,
-    fontWeight: '800',
-    lineHeight: 26,
   },
   title: {
     color: '#111827',

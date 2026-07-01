@@ -22,6 +22,12 @@ export class HttpError extends Error {
 
 let authToken = '';
 
+const authFreePaths = ['/api/auth/login', '/api/auth/register'];
+
+function shouldAttachAuth(url: string) {
+  return !authFreePaths.some(path => url.startsWith(path));
+}
+
 export function setAuthToken(token: string) {
   authToken = token;
 }
@@ -30,15 +36,23 @@ export function clearAuthToken() {
   authToken = '';
 }
 
+type RequestOptions = {
+  timeout?: number;
+};
+
 export const http = createAlova({
   baseURL: env.API_BASE_URL,
   requestAdapter: adapterFetch(),
   timeout: env.API_TIMEOUT,
   beforeRequest(method) {
+    const shouldAttachAuthorization = authToken && shouldAttachAuth(method.url);
+
     method.config.headers = {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(shouldAttachAuthorization
+        ? { Authorization: `Bearer ${authToken}` }
+        : {}),
       ...method.config.headers,
     };
   },
@@ -62,16 +76,16 @@ export const http = createAlova({
 });
 
 export const request = {
-  get<T>(url: string, params?: Record<string, unknown>) {
-    return http.Get<T>(url, { params });
+  get<T>(url: string, params?: Record<string, unknown>, options?: RequestOptions) {
+    return http.Get<T>(url, { params, ...options });
   },
-  post<T>(url: string, data?: Record<string, unknown>) {
-    return http.Post<T>(url, data);
+  post<T>(url: string, data?: Record<string, unknown>, options?: RequestOptions) {
+    return http.Post<T>(url, data, options);
   },
-  put<T>(url: string, data?: Record<string, unknown>) {
-    return http.Put<T>(url, data);
+  put<T>(url: string, data?: Record<string, unknown>, options?: RequestOptions) {
+    return http.Put<T>(url, data, options);
   },
-  delete<T>(url: string, data?: Record<string, unknown>) {
-    return http.Delete<T>(url, data);
+  delete<T>(url: string, data?: Record<string, unknown>, options?: RequestOptions) {
+    return http.Delete<T>(url, data, options);
   },
 };

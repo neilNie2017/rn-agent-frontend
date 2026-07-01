@@ -8,13 +8,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { MainTabParamList } from '../../navigation/types';
-import { useTheme, chatThemes, type ChatTheme } from '../../context/ThemeContext';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../navigation/types';
+import { useTheme, chatThemes } from '../../context/ThemeContext';
 import { clearAuthToken } from '../../request/http';
 import { rootNavigationRef } from '../../navigation/rootNavigation';
 
-type Props = BottomTabScreenProps<MainTabParamList, 'Profile'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
 const user = {
   name: 'Admin',
@@ -62,7 +62,7 @@ export function ProfileScreen({ navigation }: Props) {
           onPress={() => setThemeModalVisible(true)}
           style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
           <View style={styles.menuLeft}>
-            <View style={[styles.menuIcon, { backgroundColor: '#eff6ff' }]}>
+            <View style={[styles.menuIcon, styles.chatThemeIcon]}>
               <Text style={styles.menuIconText}>🎨</Text>
             </View>
             <View style={styles.menuTextWrap}>
@@ -76,10 +76,10 @@ export function ProfileScreen({ navigation }: Props) {
         <View style={styles.divider} />
 
         <Pressable
-          onPress={() => navigation.navigate('AgentManagement' as never)}
+          onPress={() => navigation.navigate('AgentManagement')}
           style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
           <View style={styles.menuLeft}>
-            <View style={[styles.menuIcon, { backgroundColor: '#f0fdf4' }]}>
+            <View style={[styles.menuIcon, styles.agentIcon]}>
               <Text style={styles.menuIconText}>🤖</Text>
             </View>
             <View style={styles.menuTextWrap}>
@@ -233,6 +233,12 @@ const styles = StyleSheet.create({
     height: 38,
     justifyContent: 'center',
     width: 38,
+  },
+  chatThemeIcon: {
+    backgroundColor: '#eff6ff',
+  },
+  agentIcon: {
+    backgroundColor: '#f0fdf4',
   },
   menuIconText: {
     fontSize: 18,

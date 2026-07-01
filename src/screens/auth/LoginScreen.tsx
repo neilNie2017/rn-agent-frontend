@@ -8,6 +8,7 @@ import { FormTextInput } from './FormTextInput';
 import type { RootStackParamList } from '../../navigation/types';
 import { loginApi } from '../../request/auth';
 import { setAuthToken } from '../../request/http';
+import { saveCachedUser } from '../../storage/authStorage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -24,6 +25,10 @@ function getLoginToken(response: Awaited<ReturnType<typeof loginApi>>) {
     response.token ??
     ''
   );
+}
+
+function getLoginUser(response: Awaited<ReturnType<typeof loginApi>>) {
+  return response.data?.user;
 }
 
 export function LoginScreen({ navigation }: Props) {
@@ -53,6 +58,12 @@ export function LoginScreen({ navigation }: Props) {
 
       if (token) {
         setAuthToken(token);
+      }
+
+      const user = getLoginUser(response);
+
+      if (user) {
+        await saveCachedUser(user);
       }
 
       navigation.replace('MainTabs');

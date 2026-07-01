@@ -8,7 +8,13 @@ export type LoginParams = {
 export type LoginResult = {
   accessToken?: string;
   token?: string;
-  user?: unknown;
+  user?: {
+    email?: string;
+    id?: string | number;
+    name?: string;
+    role?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type LoginResponse = {

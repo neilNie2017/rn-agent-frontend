@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -9,22 +9,51 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Bot, LogOut, Palette } from 'lucide-react-native';
 import type { RootStackParamList } from '../../navigation/types';
 import { useTheme, chatThemes } from '../../context/ThemeContext';
 import { clearAuthToken } from '../../request/http';
 import { rootNavigationRef } from '../../navigation/rootNavigation';
+import {
+  clearCachedUser,
+  getCachedUser,
+  type CachedUser,
+} from '../../storage/authStorage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
-const user = {
-  name: 'Admin',
-  email: 'admin@example.com',
-  role: '高级会员',
+const fallbackUser: CachedUser = {
+  name: 'User',
+  email: '',
+  role: '用户',
 };
+
+function getDisplayName(user: CachedUser) {
+  return user.name || user.email || 'User';
+}
 
 export function ProfileScreen({ navigation }: Props) {
   const { theme, setTheme } = useTheme();
   const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [user, setUser] = useState<CachedUser>(fallbackUser);
+
+  useEffect(() => {
+    let ignored = false;
+
+    async function loadUser() {
+      const cachedUser = await getCachedUser();
+
+      if (!ignored && cachedUser) {
+        setUser(cachedUser);
+      }
+    }
+
+    loadUser();
+
+    return () => {
+      ignored = true;
+    };
+  }, []);
 
   function handleLogout() {
     Alert.alert('退出登录', '确定要退出当前账号吗？', [
@@ -32,8 +61,9 @@ export function ProfileScreen({ navigation }: Props) {
       {
         text: '确定',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           clearAuthToken();
+          await clearCachedUser();
           rootNavigationRef.reset({ index: 0, routes: [{ name: 'Login' }] });
         },
       },
@@ -42,28 +72,33 @@ export function ProfileScreen({ navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* ── 个人信息卡片 ── */}
       <View style={styles.userCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.name.charAt(0)}</Text>
+          <Text style={styles.avatarText}>
+            {getDisplayName(user).charAt(0).toUpperCase()}
+          </Text>
         </View>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={styles.userName}>{getDisplayName(user)}</Text>
+          {user.email ? <Text style={styles.userEmail}>{user.email}</Text> : null}
         </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{user.role}</Text>
-        </View>
+        {user.role ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{String(user.role)}</Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* ── 功能菜单 ── */}
       <View style={styles.section}>
         <Pressable
           onPress={() => setThemeModalVisible(true)}
-          style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+          style={({ pressed }) => [
+            styles.menuItem,
+            pressed && styles.menuItemPressed,
+          ]}>
           <View style={styles.menuLeft}>
             <View style={[styles.menuIcon, styles.chatThemeIcon]}>
-              <Text style={styles.menuIconText}>🎨</Text>
+              <Palette color="#2563eb" size={18} strokeWidth={2.2} />
             </View>
             <View style={styles.menuTextWrap}>
               <Text style={styles.menuLabel}>聊天主题</Text>
@@ -77,10 +112,13 @@ export function ProfileScreen({ navigation }: Props) {
 
         <Pressable
           onPress={() => navigation.navigate('AgentManagement')}
-          style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}>
+          style={({ pressed }) => [
+            styles.menuItem,
+            pressed && styles.menuItemPressed,
+          ]}>
           <View style={styles.menuLeft}>
             <View style={[styles.menuIcon, styles.agentIcon]}>
-              <Text style={styles.menuIconText}>🤖</Text>
+              <Bot color="#16a34a" size={18} strokeWidth={2.2} />
             </View>
             <View style={styles.menuTextWrap}>
               <Text style={styles.menuLabel}>智能体管理</Text>
@@ -91,7 +129,6 @@ export function ProfileScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      {/* ── 退出登录 ── */}
       <View style={styles.section}>
         <Pressable
           onPress={handleLogout}
@@ -99,19 +136,19 @@ export function ProfileScreen({ navigation }: Props) {
             styles.logoutBtn,
             pressed && styles.logoutBtnPressed,
           ]}>
+          <LogOut color="#dc2626" size={18} strokeWidth={2.2} />
           <Text style={styles.logoutText}>退出登录</Text>
         </Pressable>
       </View>
 
-      {/* ── 主题选择弹窗 ── */}
       <Modal
         animationType="slide"
+        onRequestClose={() => setThemeModalVisible(false)}
         transparent
-        visible={themeModalVisible}
-        onRequestClose={() => setThemeModalVisible(false)}>
+        visible={themeModalVisible}>
         <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setThemeModalVisible(false)}>
+          onPress={() => setThemeModalVisible(false)}
+          style={styles.modalOverlay}>
           <Pressable style={styles.modalSheet}>
             <Text style={styles.modalTitle}>选择聊天主题</Text>
             <View style={styles.themeGrid}>
@@ -126,7 +163,9 @@ export function ProfileScreen({ navigation }: Props) {
                     styles.themeOption,
                     theme.id === t.id && styles.themeOptionActive,
                   ]}>
-                  <View style={[styles.themePreview, { backgroundColor: t.preview }]} />
+                  <View
+                    style={[styles.themePreview, { backgroundColor: t.preview }]}
+                  />
                   <Text
                     style={[
                       styles.themeName,
@@ -134,7 +173,9 @@ export function ProfileScreen({ navigation }: Props) {
                     ]}>
                     {t.name}
                   </Text>
-                  {theme.id === t.id && <Text style={styles.themeCheck}>✓</Text>}
+                  {theme.id === t.id ? (
+                    <Text style={styles.themeCheck}>✓</Text>
+                  ) : null}
                 </Pressable>
               ))}
             </View>
@@ -154,14 +195,12 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 20,
   },
-
-  /* ── 用户卡片 ── */
   userCard: {
     alignItems: 'center',
     backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     flexDirection: 'row',
     padding: 20,
   },
@@ -203,13 +242,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-
-  /* ── 菜单 ── */
   section: {
     backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
     overflow: 'hidden',
   },
   menuItem: {
@@ -240,9 +277,6 @@ const styles = StyleSheet.create({
   agentIcon: {
     backgroundColor: '#f0fdf4',
   },
-  menuIconText: {
-    fontSize: 18,
-  },
   menuTextWrap: {
     gap: 2,
   },
@@ -265,10 +299,11 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: 16,
   },
-
-  /* ── 退出 ── */
   logoutBtn: {
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
     paddingVertical: 14,
   },
   logoutBtnPressed: {
@@ -279,8 +314,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-
-  /* ── 主题弹窗 ── */
   modalOverlay: {
     backgroundColor: 'rgba(15, 23, 42, 0.4)',
     flex: 1,
@@ -310,16 +343,16 @@ const styles = StyleSheet.create({
   themeOption: {
     alignItems: 'center',
     backgroundColor: '#f8fafc',
+    borderColor: 'transparent',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'transparent',
     gap: 8,
     paddingVertical: 14,
     width: '47%',
   },
   themeOptionActive: {
-    borderColor: '#2563eb',
     backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
   },
   themePreview: {
     borderRadius: 14,

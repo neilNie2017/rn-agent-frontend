@@ -5,6 +5,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
 import { AgentManagementScreen } from '../screens/settings/AgentManagementScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { SplashScreen } from '../screens/splash/SplashScreen';
 import { MainTabs } from './MainTabs';
 import { rootNavigationRef } from './rootNavigation';
 import type { RootStackParamList } from './types';
@@ -15,12 +16,17 @@ export function AppNavigator() {
   return (
     <NavigationContainer ref={rootNavigationRef}>
       <Stack.Navigator
-        initialRouteName="Login"
+        initialRouteName="Splash"
         screenOptions={{
           contentStyle: { backgroundColor: '#f5f7fb' },
           headerShadowVisible: false,
           headerTitleAlign: 'center',
         }}>
+        <Stack.Screen
+          name="Splash"
+          component={SplashScreen}
+          options={{ headerShown: false }}
+        />
         <Stack.Screen
           name="Login"
           component={LoginScreen}

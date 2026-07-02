@@ -5,15 +5,20 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Bot, LogOut, Palette } from 'lucide-react-native';
+import { Bot, LogOut, Palette, Type } from 'lucide-react-native';
 import type { RootStackParamList } from '../../navigation/types';
-import { useTheme, chatThemes } from '../../context/ThemeContext';
-import { clearAuthToken } from '../../request/http';
+import {
+  chatFontSizes,
+  chatThemes,
+  useTheme,
+} from '../../context/ThemeContext';
 import { rootNavigationRef } from '../../navigation/rootNavigation';
+import { clearAuthToken } from '../../request/http';
 import {
   clearCachedUser,
   getCachedUser,
@@ -33,8 +38,16 @@ function getDisplayName(user: CachedUser) {
 }
 
 export function ProfileScreen({ navigation }: Props) {
-  const { theme, setTheme } = useTheme();
+  const {
+    chatFontSize,
+    followSystemFontScale,
+    setChatFontSize,
+    setFollowSystemFontScale,
+    setTheme,
+    theme,
+  } = useTheme();
   const [themeModalVisible, setThemeModalVisible] = useState(false);
+  const [fontSizeModalVisible, setFontSizeModalVisible] = useState(false);
   const [user, setUser] = useState<CachedUser>(fallbackUser);
 
   useEffect(() => {
@@ -127,6 +140,50 @@ export function ProfileScreen({ navigation }: Props) {
           </View>
           <Text style={styles.menuArrow}>›</Text>
         </Pressable>
+
+        <View style={styles.divider} />
+
+        <Pressable
+          onPress={() => setFontSizeModalVisible(true)}
+          style={({ pressed }) => [
+            styles.menuItem,
+            pressed && styles.menuItemPressed,
+          ]}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.menuIcon, styles.fontIcon]}>
+              <Type color="#7c3aed" size={18} strokeWidth={2.2} />
+            </View>
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuLabel}>聊天字体大小</Text>
+              <Text style={styles.menuValue}>
+                {chatFontSize.label} · {chatFontSize.value}px
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.menuArrow}>›</Text>
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        <View style={styles.menuItem}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.menuIcon, styles.systemFontIcon]}>
+              <Type color="#0f766e" size={18} strokeWidth={2.2} />
+            </View>
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuLabel}>跟随系统字体大小</Text>
+              <Text style={styles.menuValue}>
+                {followSystemFontScale ? '已开启' : '已关闭'}
+              </Text>
+            </View>
+          </View>
+          <Switch
+            onValueChange={setFollowSystemFontScale}
+            thumbColor="#ffffff"
+            trackColor={{ false: '#cbd5e1', true: '#99f6e4' }}
+            value={followSystemFontScale}
+          />
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -152,29 +209,70 @@ export function ProfileScreen({ navigation }: Props) {
           <Pressable style={styles.modalSheet}>
             <Text style={styles.modalTitle}>选择聊天主题</Text>
             <View style={styles.themeGrid}>
-              {chatThemes.map(t => (
+              {chatThemes.map(item => (
                 <Pressable
-                  key={t.id}
+                  key={item.id}
                   onPress={() => {
-                    setTheme(t);
+                    setTheme(item);
                     setThemeModalVisible(false);
                   }}
                   style={[
                     styles.themeOption,
-                    theme.id === t.id && styles.themeOptionActive,
+                    theme.id === item.id && styles.themeOptionActive,
                   ]}>
                   <View
-                    style={[styles.themePreview, { backgroundColor: t.preview }]}
+                    style={[
+                      styles.themePreview,
+                      { backgroundColor: item.preview },
+                    ]}
                   />
                   <Text
                     style={[
                       styles.themeName,
-                      theme.id === t.id && styles.themeNameActive,
+                      theme.id === item.id && styles.themeNameActive,
                     ]}>
-                    {t.name}
+                    {item.name}
                   </Text>
-                  {theme.id === t.id ? (
+                  {theme.id === item.id ? (
                     <Text style={styles.themeCheck}>✓</Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setFontSizeModalVisible(false)}
+        transparent
+        visible={fontSizeModalVisible}>
+        <Pressable
+          onPress={() => setFontSizeModalVisible(false)}
+          style={styles.modalOverlay}>
+          <Pressable style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>聊天字体大小</Text>
+            <View style={styles.fontSizeList}>
+              {chatFontSizes.map(item => (
+                <Pressable
+                  key={item.id}
+                  onPress={() => {
+                    setChatFontSize(item);
+                    setFontSizeModalVisible(false);
+                  }}
+                  style={[
+                    styles.fontSizeOption,
+                    chatFontSize.id === item.id && styles.fontSizeOptionActive,
+                  ]}>
+                  <View>
+                    <Text style={styles.fontSizeName}>{item.label}</Text>
+                    <Text style={styles.fontSizePreview}>
+                      示例文字 Aa · {item.value}px
+                    </Text>
+                  </View>
+                  {chatFontSize.id === item.id ? (
+                    <Text style={styles.fontSizeCheck}>✓</Text>
                   ) : null}
                 </Pressable>
               ))}
@@ -261,6 +359,7 @@ const styles = StyleSheet.create({
   },
   menuLeft: {
     alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
     gap: 12,
   },
@@ -277,7 +376,14 @@ const styles = StyleSheet.create({
   agentIcon: {
     backgroundColor: '#f0fdf4',
   },
+  fontIcon: {
+    backgroundColor: '#f5f3ff',
+  },
+  systemFontIcon: {
+    backgroundColor: '#ecfdf5',
+  },
   menuTextWrap: {
+    flex: 1,
     gap: 2,
   },
   menuLabel: {
@@ -374,5 +480,38 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     top: 10,
+  },
+  fontSizeList: {
+    gap: 10,
+  },
+  fontSizeOption: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderColor: 'transparent',
+    borderRadius: 12,
+    borderWidth: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  fontSizeOptionActive: {
+    backgroundColor: '#f5f3ff',
+    borderColor: '#7c3aed',
+  },
+  fontSizeName: {
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  fontSizePreview: {
+    color: '#64748b',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  fontSizeCheck: {
+    color: '#7c3aed',
+    fontSize: 16,
+    fontWeight: '900',
   },
 });

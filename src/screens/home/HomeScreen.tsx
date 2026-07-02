@@ -5,6 +5,7 @@ import {
   Dimensions,
   FlatList,
   Keyboard,
+  PixelRatio,
   Platform,
   StyleSheet,
   Text,
@@ -46,6 +47,7 @@ const initialMessages: Message[] = [
 ];
 
 const TAB_BAR_FLOAT_CLEARANCE = 0;
+const MAX_SYSTEM_FONT_SCALE = 1.25;
 
 function getKeyboardOffset(event: {
   endCoordinates: { height: number; screenY: number };
@@ -114,7 +116,7 @@ export function HomeScreen({
   onChatTitleChange,
   selectedChatId,
 }: HomeScreenProps) {
-  const { theme } = useTheme();
+  const { chatFontSize, followSystemFontScale, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [prompt, setPrompt] = useState('');
@@ -135,6 +137,16 @@ export function HomeScreen({
     }),
     [composerBottom, composerOffset, insets.bottom],
   );
+  const chatTextStyle = useMemo(() => {
+    const fontScale = followSystemFontScale
+      ? Math.min(PixelRatio.getFontScale(), MAX_SYSTEM_FONT_SCALE)
+      : 1;
+
+    return {
+      fontSize: Math.round(chatFontSize.value * fontScale),
+      lineHeight: Math.round(chatFontSize.lineHeight * fontScale),
+    };
+  }, [chatFontSize.lineHeight, chatFontSize.value, followSystemFontScale]);
 
   useEffect(() => {
     if (!selectedChatId) {
@@ -419,11 +431,20 @@ export function HomeScreen({
                   ],
             ]}>
             {item.role === 'assistant' ? (
-              <MarkdownText linkColor={theme.userBubble} textColor="#111827">
+              <MarkdownText
+                fontSize={chatTextStyle.fontSize}
+                lineHeight={chatTextStyle.lineHeight}
+                linkColor={theme.userBubble}
+                textColor="#111827">
                 {item.text}
               </MarkdownText>
             ) : (
-              <Text style={[styles.messageText, styles.userMessageText]}>
+              <Text
+                style={[
+                  styles.messageText,
+                  styles.userMessageText,
+                  chatTextStyle,
+                ]}>
                 {item.text}
               </Text>
             )}
@@ -476,7 +497,6 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     borderRadius: 8,
-    maxWidth: '84%',
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -485,10 +505,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
     borderWidth: 1,
+    width: '100%',
   },
   userBubble: {
     alignSelf: 'flex-end',
     backgroundColor: '#2563eb',
+    maxWidth: '84%',
   },
   messageText: {
     fontSize: 15,

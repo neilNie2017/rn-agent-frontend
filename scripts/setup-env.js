@@ -33,13 +33,16 @@ if (!fs.existsSync(envFile)) {
 const env = parseEnv(fs.readFileSync(envFile, 'utf8'));
 const apiBaseUrl = env.API_BASE_URL || '';
 const apiTimeout = Number(env.API_TIMEOUT || 15000);
+const chatMode = env.CHAT_MODE === 'stream' ? 'stream' : 'normal';
 
 const output = `export type AppEnvName = 'development' | 'test' | 'production';
+export type ChatMode = 'normal' | 'stream';
 
 export const env = {
   APP_ENV: ${JSON.stringify(appEnv)} as AppEnvName,
   API_BASE_URL: ${JSON.stringify(apiBaseUrl)},
   API_TIMEOUT: ${Number.isFinite(apiTimeout) ? apiTimeout : 15000},
+  CHAT_MODE: ${JSON.stringify(chatMode)} as ChatMode,
 };
 `;
 

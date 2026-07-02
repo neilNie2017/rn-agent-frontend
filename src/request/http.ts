@@ -36,6 +36,10 @@ export function clearAuthToken() {
   authToken = '';
 }
 
+export function getAuthHeaders(): Record<string, string> {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
 type RequestOptions = {
   timeout?: number;
 };

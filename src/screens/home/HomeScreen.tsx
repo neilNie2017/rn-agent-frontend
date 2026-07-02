@@ -13,17 +13,21 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatComposer } from '../../components/chat/ChatComposer';
 import { MarkdownText } from '../../components/chat/MarkdownText';
+import { env } from '../../config/env';
 import { useTheme } from '../../context/ThemeContext';
 import {
   getChatDetailApi,
   sendChatApi,
+  streamChatApi,
   type ChatDetailResponse,
   type ChatMessage,
   type SendChatResponse,
+  type StreamDonePayload,
 } from '../../request/ai';
 import { HttpError } from '../../request/http';
 
 type HomeScreenProps = {
+  onChatTitleChange?: (title: string) => void;
   selectedChatId?: string;
 };
 
@@ -65,12 +69,22 @@ function getAiReply(response: SendChatResponse) {
   );
 }
 
+function getStreamDoneReply(response?: StreamDonePayload) {
+  return response?.message?.content ?? '';
+}
+
 function getResponseChatId(response: SendChatResponse) {
   return response.data?.chatId ?? response.chatId ?? '';
 }
 
 function getDetailChatId(response: ChatDetailResponse) {
-  return response.data?.chatId ?? response.data?.id ?? response.chatId ?? response.id ?? '';
+  return (
+    response.data?.chatId ??
+    response.data?.id ??
+    response.chatId ??
+    response.id ??
+    ''
+  );
 }
 
 function getDetailMessages(response: ChatDetailResponse) {
@@ -91,10 +105,15 @@ function getErrorReply(error: unknown) {
     return data?.message ?? data?.error ?? `请求失败：${error.status}`;
   }
 
-  return error instanceof Error ? error.message : '抱歉，请求出错了，请稍后重试。';
+  return error instanceof Error
+    ? error.message
+    : '抱歉，请求出错了，请稍后重试。';
 }
 
-export function HomeScreen({ selectedChatId }: HomeScreenProps) {
+export function HomeScreen({
+  onChatTitleChange,
+  selectedChatId,
+}: HomeScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -107,6 +126,7 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
   ).current;
   const [composerOffset, setComposerOffset] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const composerDockStyle = useMemo(
     () => ({
@@ -162,6 +182,13 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
     };
   }, [selectedChatId]);
 
+  useEffect(
+    () => () => {
+      streamAbortRef.current?.abort();
+    },
+    [],
+  );
+
   useEffect(() => {
     const showEvent =
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -196,16 +223,16 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
     };
   }, [composerBottom]);
 
-  const scrollToEnd = useCallback(() => {
+  const scrollToEnd = useCallback((itemCount: number) => {
     setTimeout(() => {
-      if (messages.length > 0) {
+      if (itemCount > 0) {
         flatListRef.current?.scrollToIndex({
           animated: true,
-          index: messages.length - 1,
+          index: itemCount - 1,
         });
       }
     }, 300);
-  }, [messages.length]);
+  }, []);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -218,7 +245,6 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
         role: 'user',
         text,
       };
-
       const nextMessages = [...messages, userMessage];
 
       setMessages(nextMessages);
@@ -226,6 +252,73 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
       setLoading(true);
 
       try {
+        if (env.CHAT_MODE === 'stream') {
+          const assistantId = `${Date.now() + 1}`;
+          const abortController = new AbortController();
+
+          streamAbortRef.current?.abort();
+          streamAbortRef.current = abortController;
+
+          setMessages(prev => [
+            ...prev,
+            {
+              id: assistantId,
+              role: 'assistant',
+              text: '',
+            },
+          ]);
+
+          const donePayload = await streamChatApi(
+            {
+              ...(currentChatId ? { chatId: currentChatId } : {}),
+              messages: [
+                {
+                  content: text,
+                  role: 'user',
+                },
+              ],
+              provider: 'agnes',
+            },
+            {
+              onDelta: payload => {
+                if (!payload.content) {
+                  return;
+                }
+
+                setMessages(prev =>
+                  prev.map(item =>
+                    item.id === assistantId
+                      ? { ...item, text: `${item.text}${payload.content}` }
+                      : item,
+                  ),
+                );
+              },
+              onDone: payload => {
+                if (payload.chatId && payload.chatId !== currentChatId) {
+                  setCurrentChatId(payload.chatId);
+                }
+
+                if (payload.title) {
+                  onChatTitleChange?.(payload.title);
+                }
+              },
+              signal: abortController.signal,
+            },
+          );
+          const finalReply = getStreamDoneReply(donePayload);
+
+          if (finalReply) {
+            setMessages(prev =>
+              prev.map(item =>
+                item.id === assistantId ? { ...item, text: finalReply } : item,
+              ),
+            );
+          }
+
+          scrollToEnd(nextMessages.length + 1);
+          return;
+        }
+
         const response = await sendChatApi({
           ...(currentChatId ? { chatId: currentChatId } : {}),
           messages: [
@@ -250,21 +343,44 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-        scrollToEnd();
+        scrollToEnd(nextMessages.length + 1);
       } catch (error) {
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          text: getErrorReply(error),
-        };
+        const errorText = getErrorReply(error);
 
-        setMessages(prev => [...prev, errorMessage]);
-        scrollToEnd();
+        setMessages(prev => {
+          const emptyAssistant = [...prev]
+            .reverse()
+            .find(item => item.role === 'assistant' && !item.text);
+
+          if (!emptyAssistant) {
+            return [
+              ...prev,
+              {
+                id: (Date.now() + 1).toString(),
+                role: 'assistant',
+                text: errorText,
+              },
+            ];
+          }
+
+          return prev.map(item =>
+            item.id === emptyAssistant.id ? { ...item, text: errorText } : item,
+          );
+        });
+        scrollToEnd(nextMessages.length + 1);
       } finally {
+        streamAbortRef.current = null;
         setLoading(false);
       }
     },
-    [currentChatId, loading, loadingDetail, messages, scrollToEnd],
+    [
+      currentChatId,
+      loading,
+      loadingDetail,
+      messages,
+      onChatTitleChange,
+      scrollToEnd,
+    ],
   );
 
   return (
@@ -317,7 +433,9 @@ export function HomeScreen({ selectedChatId }: HomeScreenProps) {
           loading ? (
             <View style={styles.typingIndicator}>
               <ActivityIndicator color={theme.userBubble} size="small" />
-              <Text style={styles.typingText}>AI 正在思考...</Text>
+              <Text style={styles.typingText}>
+                {env.CHAT_MODE === 'stream' ? 'AI 正在回复...' : 'AI 正在思考...'}
+              </Text>
             </View>
           ) : null
         }

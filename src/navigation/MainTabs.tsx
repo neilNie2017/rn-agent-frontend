@@ -257,7 +257,10 @@ export function MainTabs() {
         onHeaderLeftPress={() => setSidebarVisible(true)}
         onHeaderRightPress={openProfile}
         routeName={selectedChatTitle || 'Home'}>
-        <HomeScreen selectedChatId={selectedChatId} />
+        <HomeScreen
+          onChatTitleChange={setSelectedChatTitle}
+          selectedChatId={selectedChatId}
+        />
       </ScreenLayout>
 
       {sidebarMounted ? (

@@ -1,6 +1,6 @@
 import { createAlova } from 'alova';
 import adapterFetch from 'alova/fetch';
-import { env } from '../config/env';
+import { env } from '@/config/env';
 
 export type ApiResponse<T = unknown> = {
   code: number;

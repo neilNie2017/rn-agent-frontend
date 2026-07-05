@@ -12,10 +12,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChatComposer } from '../../components/chat/ChatComposer';
-import { MarkdownText } from '../../components/chat/MarkdownText';
-import { env } from '../../config/env';
-import { useTheme } from '../../context/ThemeContext';
+import { ChatComposer } from '@/components/chat/ChatComposer';
+import { MarkdownText } from '@/components/chat/MarkdownText';
+import { env } from '@/config/env';
+import { useTheme } from '@/context/ThemeContext';
+import { rootNavigationRef } from '@/navigation/rootNavigation';
 import {
   getChatDetailApi,
   sendChatApi,
@@ -24,8 +25,8 @@ import {
   type ChatMessage,
   type SendChatResponse,
   type StreamDonePayload,
-} from '../../request/ai';
-import { HttpError } from '../../request/http';
+} from '@/request/ai';
+import { HttpError } from '@/request/http';
 
 type HomeScreenProps = {
   onChatTitleChange?: (title: string) => void;
@@ -48,6 +49,7 @@ const initialMessages: Message[] = [
 
 const TAB_BAR_FLOAT_CLEARANCE = 0;
 const MAX_SYSTEM_FONT_SCALE = 1.25;
+const MAX_AI_REPLY_ATTEMPTS = 3;
 
 function getKeyboardOffset(event: {
   endCoordinates: { height: number; screenY: number };
@@ -112,6 +114,28 @@ function getErrorReply(error: unknown) {
     : '抱歉，请求出错了，请稍后重试。';
 }
 
+async function retryAiReply<T>(task: (attempt: number) => Promise<T>) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_AI_REPLY_ATTEMPTS; attempt += 1) {
+    try {
+      return await task(attempt);
+    } catch (error) {
+      lastError = error;
+
+      if (error instanceof Error && error.message.includes('取消')) {
+        break;
+      }
+
+      if (attempt === MAX_AI_REPLY_ATTEMPTS) {
+        break;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export function HomeScreen({
   onChatTitleChange,
   selectedChatId,
@@ -123,6 +147,7 @@ export function HomeScreen({
   const [loading, setLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [currentChatId, setCurrentChatId] = useState('');
+  const [streamingMessageId, setStreamingMessageId] = useState('');
   const composerBottom = useRef(
     new Animated.Value(TAB_BAR_FLOAT_CLEARANCE),
   ).current;
@@ -270,6 +295,7 @@ export function HomeScreen({
 
           streamAbortRef.current?.abort();
           streamAbortRef.current = abortController;
+          setStreamingMessageId(assistantId);
 
           setMessages(prev => [
             ...prev,
@@ -280,43 +306,53 @@ export function HomeScreen({
             },
           ]);
 
-          const donePayload = await streamChatApi(
-            {
-              ...(currentChatId ? { chatId: currentChatId } : {}),
-              messages: [
-                {
-                  content: text,
-                  role: 'user',
+          const donePayload = await retryAiReply(async attempt => {
+            if (attempt > 1) {
+              setMessages(prev =>
+                prev.map(item =>
+                  item.id === assistantId ? { ...item, text: '' } : item,
+                ),
+              );
+            }
+
+            return streamChatApi(
+              {
+                ...(currentChatId ? { chatId: currentChatId } : {}),
+                messages: [
+                  {
+                    content: text,
+                    role: 'user',
+                  },
+                ],
+                provider: 'agnes',
+              },
+              {
+                onDelta: payload => {
+                  if (!payload.content) {
+                    return;
+                  }
+
+                  setMessages(prev =>
+                    prev.map(item =>
+                      item.id === assistantId
+                        ? { ...item, text: `${item.text}${payload.content}` }
+                        : item,
+                    ),
+                  );
                 },
-              ],
-              provider: 'agnes',
-            },
-            {
-              onDelta: payload => {
-                if (!payload.content) {
-                  return;
-                }
+                onDone: payload => {
+                  if (payload.chatId && payload.chatId !== currentChatId) {
+                    setCurrentChatId(payload.chatId);
+                  }
 
-                setMessages(prev =>
-                  prev.map(item =>
-                    item.id === assistantId
-                      ? { ...item, text: `${item.text}${payload.content}` }
-                      : item,
-                  ),
-                );
+                  if (payload.title) {
+                    onChatTitleChange?.(payload.title);
+                  }
+                },
+                signal: abortController.signal,
               },
-              onDone: payload => {
-                if (payload.chatId && payload.chatId !== currentChatId) {
-                  setCurrentChatId(payload.chatId);
-                }
-
-                if (payload.title) {
-                  onChatTitleChange?.(payload.title);
-                }
-              },
-              signal: abortController.signal,
-            },
-          );
+            );
+          });
           const finalReply = getStreamDoneReply(donePayload);
 
           if (finalReply) {
@@ -331,16 +367,18 @@ export function HomeScreen({
           return;
         }
 
-        const response = await sendChatApi({
-          ...(currentChatId ? { chatId: currentChatId } : {}),
-          messages: [
-            {
-              content: text,
-              role: 'user',
-            },
-          ],
-          provider: 'agnes',
-        });
+        const response = await retryAiReply(() =>
+          sendChatApi({
+            ...(currentChatId ? { chatId: currentChatId } : {}),
+            messages: [
+              {
+                content: text,
+                role: 'user',
+              },
+            ],
+            provider: 'agnes',
+          }),
+        );
         const reply = getAiReply(response);
         const responseChatId = getResponseChatId(response);
 
@@ -382,6 +420,7 @@ export function HomeScreen({
         scrollToEnd(nextMessages.length + 1);
       } finally {
         streamAbortRef.current = null;
+        setStreamingMessageId('');
         setLoading(false);
       }
     },
@@ -436,7 +475,7 @@ export function HomeScreen({
                 lineHeight={chatTextStyle.lineHeight}
                 linkColor={theme.userBubble}
                 textColor="#111827">
-                {item.text}
+                {streamingMessageId === item.id ? `${item.text}▍` : item.text}
               </MarkdownText>
             ) : (
               <Text
@@ -465,6 +504,7 @@ export function HomeScreen({
         <ChatComposer
           accentColor={theme.userBubble}
           loading={loading || loadingDetail}
+          onCameraPress={() => rootNavigationRef.navigate('CameraCapture')}
           onChangeText={setPrompt}
           onSend={handleSend}
           value={prompt}

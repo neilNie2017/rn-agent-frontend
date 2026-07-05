@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { SplashAdConfig } from '../request/app';
+import type { SplashAdConfig } from '@/request/app';
 
 const SPLASH_AD_CACHE_KEY = 'splash_ad_config';
 

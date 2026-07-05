@@ -5,10 +5,10 @@ import { useForm } from 'react-hook-form';
 import { AuthButton } from './AuthButton';
 import { AuthLayout } from './AuthLayout';
 import { FormTextInput } from './FormTextInput';
-import type { RootStackParamList } from '../../navigation/types';
-import { loginApi } from '../../request/auth';
-import { setAuthToken } from '../../request/http';
-import { saveCachedUser } from '../../storage/authStorage';
+import type { RootStackParamList } from '@/navigation/types';
+import { loginApi } from '@/request/auth';
+import { setAuthToken } from '@/request/http';
+import { saveCachedUser } from '@/storage/authStorage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 

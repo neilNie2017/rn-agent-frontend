@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { AuthButton } from './AuthButton';
 import { AuthLayout } from './AuthLayout';
 import { FormTextInput } from './FormTextInput';
-import type { RootStackParamList } from '../../navigation/types';
+import type { RootStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 

@@ -1,11 +1,12 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { LoginScreen } from '../screens/auth/LoginScreen';
-import { RegisterScreen } from '../screens/auth/RegisterScreen';
-import { AgentManagementScreen } from '../screens/settings/AgentManagementScreen';
-import { ProfileScreen } from '../screens/profile/ProfileScreen';
-import { SplashScreen } from '../screens/splash/SplashScreen';
+import { LoginScreen } from '@/screens/auth/LoginScreen';
+import { CameraCaptureScreen } from '@/screens/camera/CameraCaptureScreen';
+import { RegisterScreen } from '@/screens/auth/RegisterScreen';
+import { AgentManagementScreen } from '@/screens/settings/AgentManagementScreen';
+import { ProfileScreen } from '@/screens/profile/ProfileScreen';
+import { SplashScreen } from '@/screens/splash/SplashScreen';
 import { MainTabs } from './MainTabs';
 import { rootNavigationRef } from './rootNavigation';
 import type { RootStackParamList } from './types';
@@ -50,6 +51,11 @@ export function AppNavigator() {
         <Stack.Screen
           name="AgentManagement"
           component={AgentManagementScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="CameraCapture"
+          component={CameraCaptureScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

@@ -5,4 +5,5 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Profile: undefined;
   AgentManagement: undefined;
+  CameraCapture: undefined;
 };

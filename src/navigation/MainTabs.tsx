@@ -12,14 +12,14 @@ import {
 } from 'react-native';
 import { Trash2, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ScreenLayout } from '../components/layout/ScreenLayout';
-import { HomeScreen } from '../screens/home/HomeScreen';
+import { ScreenLayout } from '@/components/layout/ScreenLayout';
+import { HomeScreen } from '@/screens/home/HomeScreen';
 import {
   deleteChatApi,
   getChatsApi,
   type ChatSummary,
   type ChatsResponse,
-} from '../request/ai';
+} from '@/request/ai';
 import { rootNavigationRef } from './rootNavigation';
 
 type Conversation = {

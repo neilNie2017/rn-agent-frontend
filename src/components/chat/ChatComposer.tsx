@@ -11,30 +11,31 @@ import {
 import { Camera, Mic, SendHorizontal } from 'lucide-react-native';
 
 type ChatComposerProps = {
-  value: string;
+  accentColor?: string;
+  loading?: boolean;
+  onCameraPress?: () => void;
   onChangeText: (text: string) => void;
   onSend: (text: string) => void;
-  loading?: boolean;
-  accentColor?: string;
+  value: string;
 };
 
 export function ChatComposer({
-  value,
+  accentColor = '#2563eb',
+  loading = false,
+  onCameraPress,
   onChangeText,
   onSend,
-  loading = false,
-  accentColor = '#2563eb',
+  value,
 }: ChatComposerProps) {
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
   const focusAnim = useRef(new Animated.Value(0)).current;
-
   const canSend = value.trim().length > 0 && !loading;
 
   React.useEffect(() => {
     Animated.timing(focusAnim, {
-      toValue: isFocused ? 1 : 0,
       duration: 200,
+      toValue: isFocused ? 1 : 0,
       useNativeDriver: false,
     }).start();
   }, [isFocused, focusAnim]);
@@ -54,27 +55,13 @@ export function ChatComposer({
 
   const handleVoice = useCallback(() => {
     Keyboard.dismiss();
-    Alert.alert(
-      '语音输入',
-      '语音识别功能需要安装 react-native-voice，是否继续？',
-      [
-        { text: '取消', style: 'cancel' },
-        { text: '确定', onPress: () => {} },
-      ],
-    );
+    Alert.alert('语音输入', '语音识别功能暂未接入。');
   }, []);
 
   const handleCamera = useCallback(() => {
     Keyboard.dismiss();
-    Alert.alert(
-      '拍照功能',
-      '拍照功能需要安装 react-native-image-picker，是否继续？',
-      [
-        { text: '取消', style: 'cancel' },
-        { text: '确定', onPress: () => {} },
-      ],
-    );
-  }, []);
+    onCameraPress?.();
+  }, [onCameraPress]);
 
   return (
     <View style={styles.container}>
@@ -152,6 +139,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 18,
   },
+  input: {
+    color: '#111827',
+    flex: 1,
+    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  inputWrap: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
+    borderWidth: 1,
+    flex: 1,
+    maxHeight: 104,
+    minHeight: 40,
+  },
+  sendBtn: {
+    alignItems: 'center',
+    borderRadius: 20,
+    height: 40,
+    justifyContent: 'center',
+    width: 44,
+  },
+  sendBtnPressed: {
+    opacity: 0.8,
+  },
   toolbar: {
     flexDirection: 'row',
     gap: 4,
@@ -165,30 +177,5 @@ const styles = StyleSheet.create({
   },
   toolBtnPressed: {
     backgroundColor: '#f1f5f9',
-  },
-  inputWrap: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 18,
-    borderWidth: 1,
-    flex: 1,
-    maxHeight: 104,
-    minHeight: 40,
-  },
-  input: {
-    color: '#111827',
-    flex: 1,
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  sendBtn: {
-    alignItems: 'center',
-    borderRadius: 20,
-    height: 40,
-    justifyContent: 'center',
-    width: 44,
-  },
-  sendBtnPressed: {
-    opacity: 0.8,
   },
 });

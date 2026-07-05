@@ -1,4 +1,4 @@
-import { env } from '../config/env';
+import { env } from '@/config/env';
 import { getAuthHeaders, HttpError, request } from './http';
 
 export type ChatSummary = {

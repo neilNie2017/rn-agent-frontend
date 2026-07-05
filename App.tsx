@@ -1,8 +1,8 @@
 import React from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AppNavigator } from './src/navigation/AppNavigator';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider } from '@/context/ThemeContext';
+import { AppNavigator } from '@/navigation/AppNavigator';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';

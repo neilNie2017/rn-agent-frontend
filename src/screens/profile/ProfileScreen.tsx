@@ -11,19 +11,19 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bot, LogOut, Palette, Type } from 'lucide-react-native';
-import type { RootStackParamList } from '../../navigation/types';
+import type { RootStackParamList } from '@/navigation/types';
 import {
   chatFontSizes,
   chatThemes,
   useTheme,
-} from '../../context/ThemeContext';
-import { rootNavigationRef } from '../../navigation/rootNavigation';
-import { clearAuthToken } from '../../request/http';
+} from '@/context/ThemeContext';
+import { rootNavigationRef } from '@/navigation/rootNavigation';
+import { clearAuthToken } from '@/request/http';
 import {
   clearCachedUser,
   getCachedUser,
   type CachedUser,
-} from '../../storage/authStorage';
+} from '@/storage/authStorage';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 

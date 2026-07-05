@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../navigation/types';
-import type { SplashAdConfig } from '../../request/app';
+import type { RootStackParamList } from '@/navigation/types';
+import type { SplashAdConfig } from '@/request/app';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
